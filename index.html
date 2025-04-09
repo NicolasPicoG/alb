@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Front</title>
+</head>
+<body>
+  <h1>Frontend Test</h1>
+  <button onclick="callApi()">Call API</button>
+  <pre id="result"></pre>
+  <script>
+    async function callApi() {
+      const res = await fetch('/api/poc'); // O ajusta el path según tus reglas
+      const text = await res.text();
+      document.getElementById('result').textContent = text;
+    }
+  </script>
+</body>
+</html>

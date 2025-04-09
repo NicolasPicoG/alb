@@ -1,0 +1,82 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation stack to deploy ALB + EC2 (NGINX) proxy to forward requests to API Gateway
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+
+  ProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP from ALB and SSH (temporarily open)
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+  ProxyInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t2.micro
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref ProxySecurityGroup
+      ImageId: ami-0c02fb55956c7d316 # Amazon Linux 2 (verifica la región)
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          yum update -y
+          amazon-linux-extras enable nginx1
+          yum install -y nginx
+          cat > /etc/nginx/nginx.conf <<EOF
+          events {}
+          http {
+            server {
+              listen 80;
+              location /api/ {
+                proxy_pass https://cawbm2gjak.execute-api.us-east-1.amazonaws.com/stage/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+              }
+            }
+          }
+          EOF
+          systemctl enable nginx
+          systemctl restart nginx
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 80
+      TargetType: instance
+      Targets:
+        - Id: !Ref ProxyInstance
+      HealthCheckPath: /api/poc
+      HealthCheckProtocol: HTTP
+
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: arn:aws:elasticloadbalancing:us-east-1:381492081993:listener/app/pocalb-Internal-ALB/f66cce68f43b3f2c/a7c0e4c07c2e109d
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /api/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
