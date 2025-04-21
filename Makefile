@@ -25,13 +25,13 @@ HostedZoneId := "Z008209324DOK7DJC7VFT"
 # ACM Certificate Arn
 ACMCertificateArn := "arn:aws:acm:us-east-1:381492081993:certificate/e850f924-6583-4a94-9626-0f8980344551"
 # VPC Id
-VpcId := "vpc-06a3c67543fa27054"
+VpcId := "vpc-0a5c0a5649761b5c6"
 # VPC Cidr Block
 VpcCidrBlock := "10.0.0.0/16"
 # Private Subnet 1
-PrivateSubnetId1 := "subnet-0bb2fc1b28785d305"
+PrivateSubnetId1 := "subnet-00b2322f0d4f1dcd1"
 # Private Subnet 2
-PrivateSubnetId2 := "subnet-07e520734b5f52c71"
+PrivateSubnetId2 := "subnet-06b0d62e710bd3831"
 #######################################################
 
 infra:

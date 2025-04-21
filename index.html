@@ -9,7 +9,7 @@
   <pre id="result"></pre>
   <script>
     async function callApi() {
-      const res = await fetch('/api/poc'); // O ajusta el path según tus reglas
+      const res = await fetch('https://5agtys2za9.execute-api.us-east-1.amazonaws.com/prod/hola');
       const text = await res.text();
       document.getElementById('result').textContent = text;
     }

@@ -1,0 +1,129 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Lambda proxy para consumir API Gateway privado desde ALB interno
+
+Parameters:
+  AlbListenerArn:
+    Type: String
+    Default: arn:aws:elasticloadbalancing:us-east-1:381492081993:listener/app/pocalb-Internal-ALB/12e3ccb9a00e6dcb/836c62660c873ffc
+
+  Subnet1:
+    Type: String
+    Default: subnet-00b2322f0d4f1dcd1
+
+  Subnet2:
+    Type: String
+    Default: subnet-06b0d62e710bd3831
+
+  VpcEndpointSG:
+    Type: String
+    Default: sg-07b75ed8af442b42d
+
+Resources:
+
+  LambdaProxyExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: LambdaProxyExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaVpcExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateNetworkInterface
+                  - ec2:DescribeNetworkInterfaces
+                  - ec2:DeleteNetworkInterface
+                Resource: '*'
+
+  LambdaProxyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: LambdaProxyToApi
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaProxyExecutionRole.Arn
+      VpcConfig:
+        SubnetIds:
+          - !Ref Subnet1
+          - !Ref Subnet2
+        SecurityGroupIds:
+          - !Ref VpcEndpointSG
+      Code:
+        ZipFile: |
+          const https = require('https');
+          exports.handler = async function(event) {
+            return new Promise((resolve, reject) => {
+              const options = {
+                hostname: '5agtys2za9.execute-api.us-east-1.amazonaws.com',
+                path: '/prod/hola',
+                method: 'GET'
+              };
+
+              const req = https.request(options, res => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  resolve({
+                    statusCode: res.statusCode,
+                    body: data
+                  });
+                });
+              });
+
+              req.on('error', err => {
+                reject({
+                  statusCode: 500,
+                  body: JSON.stringify({ error: err.message })
+                });
+              });
+
+              req.end();
+            });
+          };
+
+  LambdaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: LambdaProxyTG
+      TargetType: lambda
+      Targets:
+        - Id: !GetAtt LambdaProxyFunction.Arn
+
+  PermissionForALBtoInvokeLambda:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LambdaProxyFunction
+      Action: lambda:InvokeFunction
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceArn: arn:aws:elasticloadbalancing:us-east-1:381492081993:loadbalancer/app/pocalb-Internal-ALB/12e3ccb9a00e6dcb
+
+  LambdaInvokePermissionForELB:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt MyLambdaFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: elasticloadbalancing.amazonaws.com
+      SourceArn: arn:aws:elasticloadbalancing:us-east-1:381492081993:targetgroup/LambdaProxyTG/8376c30d1b862eaa
+
+  AlbListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref AlbListenerArn
+      Priority: 10
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /proxy
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref LambdaTargetGroup

@@ -1,1 +1,18 @@
-From <a href="https://zoph.io" target="_blank">zoph.io</a> with 🫶
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Test Front</title>
+</head>
+<body>
+  <h1>Frontend Test</h1>
+  <button onclick="callApi()">Call API</button>
+  <pre id="result"></pre>
+  <script>
+    async function callApi() {
+      const res = await fetch('https://5agtys2za9.execute-api.us-east-1.amazonaws.com/prod/hola');
+      const text = await res.text();
+      document.getElementById('result').textContent = text;
+    }
+  </script>
+</body>
+</html>
